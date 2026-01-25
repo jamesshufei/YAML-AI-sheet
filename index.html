@@ -1,4 +1,4 @@
-
+<!DOCTYPE html>
 <html lang="zh-Hant-TW">
 <head>
     <meta charset="UTF-8">
@@ -91,6 +91,13 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             margin-bottom: 20px;
         }
+        .control-panel {
+            background-color: #fcfcfc;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
@@ -110,7 +117,8 @@
             
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label for="apiKey" class="form-label fw-bold small">Google AI Studio API Key</label>
+                    <!-- API Key (Highlighted in Red) -->
+                    <label for="apiKey" class="form-label fw-bold small text-danger">Google AI Studio API Key</label>
                     <div class="input-group input-group-sm">
                         <span class="input-group-text"><i class="fas fa-key"></i></span>
                         <input type="password" class="form-control" id="apiKey" placeholder="貼上 API Key" autocomplete="off">
@@ -150,16 +158,41 @@
                     <button class="btn btn-outline-danger btn-sm mt-2" id="removeFileBtn">移除檔案</button>
                 </div>
 
-                <!-- Action Button -->
-                <div class="d-grid gap-2 mt-4">
-                    <button class="btn btn-primary btn-lg" id="analyzeBtn" disabled>
-                        <i class="fas fa-search me-2"></i>開始 AI 風格分析
-                    </button>
+                <!-- Control Panel (Highlighted Menu in Green) -->
+                <div class="control-panel">
+                    <label class="form-label fw-bold text-success"><i class="fas fa-sliders-h me-1"></i> 風格分析選單</label>
+                    
+                    <!-- Selection Menu -->
+                    <select class="form-select mb-3" id="analysisType">
+                        <option value="reverse_prompt" selected>1. 深度分析並產生高品質 AI 繪圖提示詞 (純文字)</option>
+                        <option value="analyze_image" class="text-primary fw-bold">2. 依據圖片分析七大區塊資料 (可傳送至 Sheet)</option>
+                        <option value="analyze_slide" class="text-primary fw-bold">3. 依據簡報分析七大區塊資料 (可傳送至 Sheet)</option>
+                        <option value="custom">4. 使用者自行輸入分析資料要求 (純文字)</option>
+                    </select>
+
+                    <!-- Dynamic Input: Custom Prompt (Visible for Option 4) -->
+                    <div id="customPromptGroup" class="mb-3" style="display: none;">
+                        <label for="customPromptInput" class="form-label text-primary fw-bold">自定義提示詞內容</label>
+                        <textarea class="form-control" id="customPromptInput" rows="3" placeholder="請輸入您想詢問 AI 的具體指令..."></textarea>
+                    </div>
+                    
+                    <!-- Hint -->
+                    <div id="sheetHint" class="alert alert-info py-2 small" style="display: none;">
+                        <i class="fas fa-info-circle me-1"></i> 此模式將分析上傳檔案並產生結構化資料，支援直接傳送至 Google Sheet。<br>
+                        <strong>Prompt 升級：</strong> 強制要求完整中文翻譯，確保每個細節都有中英對照。
+                    </div>
+
+                    <!-- Action Button -->
+                    <div class="d-grid gap-2 mt-3">
+                        <button class="btn btn-primary btn-lg" id="analyzeBtn" disabled>
+                            <i class="fas fa-search me-2"></i>開始 AI 風格分析
+                        </button>
+                    </div>
                 </div>
 
-                <!-- Result Section -->
+                <!-- Result Section (Highlighted in Blue) -->
                 <div class="mt-4">
-                    <label for="resultOutput" class="form-label fw-bold">分析結果 (YAML)</label>
+                    <label for="resultOutput" class="form-label fw-bold text-primary">分析結果</label>
                     <textarea class="form-control result-area" id="resultOutput" readonly placeholder="等待分析結果..."></textarea>
                     
                     <!-- Export Buttons -->
@@ -185,7 +218,7 @@
         </div>
     </div>
 
-    <!-- Hidden element for PDF generation (ensures clean styling for the PDF) -->
+    <!-- Hidden element for PDF generation -->
     <div id="pdf-render-source">
         <h2 style="border-bottom: 2px solid #333; padding-bottom: 10px;">視覺風格分析報告</h2>
         <p><strong>產出時間：</strong> <span id="pdfDate"></span></p>
@@ -228,6 +261,12 @@
         const copyBtn = document.getElementById('copyBtn');
         const sendSheetBtn = document.getElementById('sendSheetBtn');
 
+        // Control Elements
+        const analysisTypeSelect = document.getElementById('analysisType');
+        const customPromptGroup = document.getElementById('customPromptGroup');
+        const customPromptInput = document.getElementById('customPromptInput');
+        const sheetHint = document.getElementById('sheetHint');
+
         // State
         let currentFile = null;
         let currentBase64 = null;
@@ -257,6 +296,9 @@
         fileInput.addEventListener('change', handleFiles);
         removeFileBtn.addEventListener('click', resetFile);
 
+        // Analysis Type Change
+        analysisTypeSelect.addEventListener('change', handleAnalysisTypeChange);
+
         // Analysis
         analyzeBtn.addEventListener('click', startAnalysis);
 
@@ -272,15 +314,28 @@
 
         // --- Functions ---
 
+        function handleAnalysisTypeChange() {
+            const type = analysisTypeSelect.value;
+            
+            // Hide all dynamic inputs first
+            customPromptGroup.style.display = 'none';
+            sheetHint.style.display = 'none';
+
+            // Show relevant input
+            if (type === 'custom') {
+                customPromptGroup.style.display = 'block';
+                customPromptInput.focus();
+            } else if (type === 'analyze_image' || type === 'analyze_slide') {
+                sheetHint.style.display = 'block';
+            }
+        }
+
         function toggleSheetButton() {
+            // Only show sheet button if URL is present and analysis is done
             if (sheetUrlInput.value.trim().length > 0 && !sendSheetBtn.disabled && resultOutput.value.length > 0) {
                 sendSheetBtn.style.display = 'inline-block';
-            } else if (resultOutput.value.length === 0) {
-                sendSheetBtn.style.display = 'none';
-            } else if (sheetUrlInput.value.trim().length === 0) {
-                sendSheetBtn.style.display = 'none';
             } else {
-                sendSheetBtn.style.display = 'inline-block';
+                sendSheetBtn.style.display = 'none';
             }
         }
 
@@ -332,6 +387,7 @@
             analyzeBtn.disabled = true;
             resultOutput.value = '';
             disableExportButtons();
+            toggleSheetButton();
         }
 
         function disableExportButtons() {
@@ -362,32 +418,96 @@
                 return;
             }
 
+            // Determine Prompt based on selection
+            const analysisType = analysisTypeSelect.value;
+            let promptText = "";
+
+            // Unified System Instruction for Structured Output (Used for Opt 2 & 3)
+            // UPDATED: Added STRICT instruction for FULL CHINESE TRANSLATION
+            const structuredSystemPrompt = `
+                請擔任 AI 圖像生成專家與資料分析師。
+                請依據指示產生結構化的 YAML 資料。
+                請勿使用 Markdown 標記（如 \`\`\`yaml），直接輸出 YAML 內容。
+                
+                必要欄位 (Keys) 順序如下，請嚴格遵守：
+                subject: (主體描述 - 繁體中文)
+                action: (動作/動態 - 繁體中文)
+                scene: (場景/環境 - 繁體中文)
+                visual_style: (視覺風格 - 繁體中文)
+                lighting: (光線/氛圍 - 繁體中文)
+                composition: (構圖/視角 - 繁體中文)
+                
+                negative_prompt: (
+                    1. 先列出英文 Negative Prompt (例如：low quality, bad anatomy...)
+                    2. 接著在括號 ( ) 內提供繁體中文說明。
+                )
+
+                colors: (請分析並列出畫面中的 Hex Code，包含主色、輔助色與特殊色，格式如：#FF0000 (Main), #00FF00 (Sub)...)
+                
+                full_prompt: (
+                    此欄位放在最後，請依照以下結構生成，並確保包含中英文：
+                    1. [English Prompt]: 產生一段高品質、可直接用於 Stable Diffusion 的英文提示詞。
+                       - 必須包含上述的主體、動作、場景、光線。
+                       - **強制要求**：將 colors 欄位中的色系 Hex Code 與描述，直接寫入此段英文 Prompt 中。
+                       - **強制要求**：將 negative_prompt 欄位的內容作為參數加入 (例如: --no low quality...)。
+                    2. [Chinese Translation]: 換行後，請提供該英文 Prompt 的「完整繁體中文翻譯」，確保每一個描述詞（包含風格、光影、材質、色系）都有對應的中文翻譯，請勿僅做摘要。
+                )
+            `;
+
+            if (analysisType === 'reverse_prompt') {
+                // Option 1: Deep Analysis Prompt (Text Output) - UPDATED FOR OPTION 1
+                promptText = `
+                    請擔任 AI 圖像生成專家。
+                    1. 請先用英文撰寫一段完整、高品質的 Prompt，包含視覺風格、藝術流派、光影、構圖、材質質感、色系等細節。
+                    2. **重要：** 在英文 Prompt 之後，請務必換行，並提供這段 Prompt 的「完整繁體中文翻譯」。
+                    3. 請確保翻譯是「逐字對應」的，不要省略任何技術詞彙或風格描述。
+                    4. 最後，請提供一份繁體中文的深度風格分析報告。
+                `;
+            
+            } else if (analysisType === 'analyze_image') {
+                // Option 2
+                promptText = `
+                    ${structuredSystemPrompt}
+                    
+                    任務：
+                    請分析上傳的檔案（圖像），重點在於「藝術風格」、「攝影光影」與「繪圖細節」。
+                    請依據圖片的真實內容填入上述 YAML 欄位。
+                    **特別注意：full_prompt 必須強制包含具體的色系代碼 (Hex) 與負面提示詞，並且翻譯必須完整。**
+                `;
+
+            } else if (analysisType === 'analyze_slide') {
+                // Option 3
+                promptText = `
+                    ${structuredSystemPrompt}
+                    
+                    任務：
+                    請分析上傳的檔案（簡報投影片），重點在於「版面配置」、「資訊層級」與「簡報設計風格」。
+                    
+                    欄位填寫指南：
+                    subject: 簡報的主題或核心訊息。
+                    action: 畫面的動線引導或動態元素。
+                    scene: 簡報的背景設計與排版結構。
+                    visual_style: 簡報的整體設計語言（如：扁平化、科技感、極簡風）。
+                    lighting: 畫面整體的明暗對比與氛圍。
+                    composition: 圖文排版與視角。
+                `;
+
+            } else if (analysisType === 'custom') {
+                // Option 4
+                const customPrompt = customPromptInput.value.trim();
+                if (!customPrompt) {
+                    alert('請輸入「自定義提示詞」');
+                    customPromptInput.focus();
+                    return;
+                }
+                promptText = customPrompt;
+            }
+
             loadingOverlay.style.display = 'flex';
             analyzeBtn.disabled = true;
             resultOutput.value = '正在聯繫 Gemini 進行分析...';
 
             try {
-                const promptText = `
-                    You are a professional visual design expert. 
-                    Analyze the uploaded file (image or PDF document).
-                    Identify the visual style, name it, describe it, and extract the color palette.
-                    
-                    Return the result STRICTLY in YAML format.
-                    DO NOT include markdown code blocks (like \`\`\`yaml).
-                    
-                    The output must follow this structure:
-                    style_name: "Name of the style (in Traditional Chinese)"
-                    style_description: "A detailed description of the style (in Traditional Chinese)"
-                    primary_colors: 
-                      - "#HexCode"
-                      - "#HexCode"
-                    secondary_colors:
-                      - "#HexCode"
-                      - "#HexCode"
-                    
-                    Ensure the color codes are valid HEX codes.
-                `;
-
                 // Using gemini-2.5-flash-preview-09-2025
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                     method: 'POST',
@@ -405,9 +525,11 @@
                 const data = await response.json();
 
                 if (data.error) throw new Error(data.error.message);
+                if (!data.candidates || !data.candidates[0].content) throw new Error("無回應內容");
 
                 let text = data.candidates[0].content.parts[0].text;
-                text = text.replace(/```yaml/g, '').replace(/```/g, '').trim();
+                // Cleanup common markdown formatting
+                text = text.replace(/^```[a-z]*\n/i, '').replace(/\n```$/, '').trim();
 
                 resultOutput.value = text;
                 enableExportButtons();
@@ -422,40 +544,49 @@
             }
         }
 
-        // --- Helper: Parse Data (IMPROVED) ---
+        // --- Helper: Parse Data (Parsing Logic Updated) ---
         function getParsedData() {
             const content = resultOutput.value;
             if (!content) return null;
+            
+            // Helper to clean quotes and whitespace
+            const clean = (str) => str ? str.replace(/^["']|["']$/g, '').trim() : "";
 
+            // Old single-line regex (kept for simple fields)
             const getVal = (key) => {
-                const regex = new RegExp(`${key}:\\s*"?(.*?)"?$`, "m");
+                const regex = new RegExp(`${key}:\\s*(.*?)$`, "m");
                 const match = content.match(regex);
-                return match ? match[1].replace(/"/g, '') : "";
+                return match ? clean(match[1]) : "";
             };
 
-            // Improved List Parsing:
-            // 1. Matches key followed by colon
-            // 2. Captures content until next root-level key (start of line) or end of file
-            // 3. Extracts both 3-digit (#fff) and 6-digit (#ffffff) hex codes
-            const getList = (key) => {
-                // Use a safer regex that looks for the key, then grabs everything until the next newline that looks like a key
-                // Or simply grab the next few lines
-                const regex = new RegExp(`${key}:([\\s\\S]*?)(?=\\n[\\w]+:|$)`, "i");
+            // NEW Multiline regex: Captures everything until the next key (start of line followed by word and colon)
+            const getMultiLineVal = (key) => {
+                const regex = new RegExp(`${key}:([\\s\\S]*?)(?=\\n[a-z_]+:|$)`, "i");
                 const match = content.match(regex);
-                
-                if (!match || !match[1]) return "";
-                
-                // Match hex codes (3 or 6 chars)
-                const hexes = match[1].match(/#[A-Fa-f0-9]{3,6}\b/g);
-                return hexes ? hexes.join("; ") : "未偵測到色票";
+                return match ? clean(match[1]) : "";
             };
 
+            // Check if we are in YAML mode
+            const subject = getVal("subject");
+            const visualStyle = getVal("visual_style");
+
+            // For full_prompt and negative_prompt, use multiline parsing
+            const fullPrompt = getMultiLineVal("full_prompt");
+            const negativePrompt = getMultiLineVal("negative_prompt");
+            const colors = getVal("colors"); // Colors usually short enough for single line, but let's be safe
+            
             return {
                 filename: currentFile ? currentFile.name : "unknown_file",
-                style_name: getVal("style_name"),
-                description: getVal("style_description"),
-                primary: getList("primary_colors"),
-                secondary: getList("secondary_colors")
+                subject: subject || "文字模式/未偵測",
+                action: getVal("action"),
+                scene: getVal("scene"),
+                visual_style: visualStyle || getVal("style_name"), 
+                lighting: getVal("lighting"),
+                composition: getVal("composition"),
+                // Use multiline results
+                negative_prompt: negativePrompt || getVal("negative_prompt"),
+                full_prompt: fullPrompt || getVal("full_prompt"),
+                colors: colors
             };
         }
 
@@ -469,27 +600,30 @@
 
             const data = getParsedData();
             if (!data) return;
+            
+            // Warning if data looks empty (likely wrong mode selected)
+            if (data.subject === "文字模式/未偵測" && !data.visual_style) {
+                const confirmSend = confirm("偵測到分析結果可能不是 Sheet 專用的 YAML 格式（可能是文字模式）。\n\n傳送至 Sheet 可能會導致欄位空白或錯誤。\n\n確定要繼續嗎？");
+                if (!confirmSend) return;
+            }
 
             const originalBtnText = sendSheetBtn.innerHTML;
             sendSheetBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 傳送中...';
             sendSheetBtn.disabled = true;
 
             try {
-                // Fetch with mode 'no-cors' is required for simple client-side calls to GAS Web Apps
                 await fetch(url, {
                     method: 'POST',
                     mode: 'no-cors', 
-                    headers: {
-                        'Content-Type': 'text/plain'
-                    },
+                    headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify(data)
                 });
 
-                alert("請求已發送！\n資料應已寫入您的 Google Sheet。\n\n(若 Sheet 中仍無顏色，請檢查 Apps Script 是否正確接收 data.primary 和 data.secondary)");
+                alert("請求已發送！\n資料應已寫入您的 Google Sheet。");
                 
             } catch (error) {
                 console.error(error);
-                alert("傳送失敗，請檢查 URL 是否正確，或 Apps Script 是否已部署為「任何人」可存取。");
+                alert("傳送失敗，請檢查 URL。");
             } finally {
                 sendSheetBtn.innerHTML = originalBtnText;
                 sendSheetBtn.disabled = false;
@@ -536,9 +670,14 @@
             if (!data) return;
 
             const date = new Date().toLocaleString('zh-TW');
-            const csvContent = "\uFEFF" + 
-                "檔案名稱,分析日期,風格名稱,風格描述,主色系,輔助色系\n" +
-                `"${data.filename}","${date}","${data.style_name}","${data.description}","${data.primary}","${data.secondary}"`;
+            
+            // CSV Headers
+            const headers = "檔案名稱,主體,動作,場景,視覺風格,光線,構圖,負面提示詞,色系,完整 Prompt\n";
+            
+            // CSV Row (Updated Order)
+            const row = `"${data.filename}","${data.subject}","${data.action}","${data.scene}","${data.visual_style}","${data.lighting}","${data.composition}","${data.negative_prompt.replace(/"/g, '""')}","${data.colors}","${data.full_prompt.replace(/"/g, '""')}"`;
+
+            const csvContent = "\uFEFF" + headers + row;
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
             const url = URL.createObjectURL(blob);
